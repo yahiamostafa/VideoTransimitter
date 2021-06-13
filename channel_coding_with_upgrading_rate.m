@@ -5,6 +5,7 @@ new_video(1:frames) =struct ('cdata', zeros(s(1),s(2),3,'uint8'), 'colormap',[])
 trellis= poly2trellis(7,[171 133]);
 % rates will be used
 rate = [8/9,4/5,2/3,4/7,1/2];
+c =0;
 % punctring rules corresponding to the rate in the same index .
 punct = [
     1 1 1 0 1 0 1 0 0 1 1 0 1 0 1 0; % rate 8/9 
@@ -12,10 +13,10 @@ punct = [
     1 1 1 0 1 1 1 0 1 1 1 0 1 1 1 0; % rate 2/3
     1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 0; % rate 4/7
     1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]; % rate 1/2
-mul = 2048;
+mul = 0;
 difference =0;
-total_Rate = 0;
 total_number_of_bits = s(1)*s(2)*s(3)*frames*8;
+total_number_of_transimitted_bits =0;
 for frame = 1:frames
     red = all_frames(frame).cdata(:,:,1); % red color in the ith frame.
     green = all_frames(frame).cdata(:,:,2); % green color in the ith frame.
@@ -34,11 +35,12 @@ for frame = 1:frames
     Bbin = reshape(Bbin,[1 s(1)*s(2)*8]);
     
     pkts = length(Rbin)/1024;
-    total_number_of_packets = pkts * frames;
     for pkt =1 :pkts
         % go throught all rates incase of error occured.
         for rep =1:5
-            mul = 1024*(1/rate(rep));   
+            c = c +1;
+            mul = 1024*(1/rate(rep));
+            total_number_of_transimitted_bits = total_number_of_transimitted_bits + 3*mul;
             Rencodded((pkt-1)*mul+1:pkt*mul) = convenc(Rbin((pkt-1)*1024+1:pkt*1024),trellis,punct(rep,:));
             Gencodded((pkt-1)*mul+1:pkt*mul) = convenc(Gbin((pkt-1)*1024+1:pkt*1024),trellis,punct(rep,:));
             Bencodded((pkt-1)*mul+1:pkt*mul) = convenc(Bbin((pkt-1)*1024+1:pkt*1024),trellis,punct(rep,:));
@@ -52,18 +54,11 @@ for frame = 1:frames
             Berror((pkt-1)*1024+1:pkt*1024) = vitdec(Bencodded((pkt-1)*mul+1:pkt*mul),trellis,35,'trunc','hard',punct(rep,:));
             if (isequal(Rbin((pkt-1)*1024+1:pkt*1024),Rerror((pkt-1)*1024+1:pkt*1024)))
                 % if no error occured add the rate to the total rate to
-                % calculate the throughput
-                total_Rate = total_Rate + rate(rep);
+                % calculate the throughput            
                 break
-            else if (rep ==5)
-                    % if there is an error in rate = 1/2 just send the
-                    % packet
-                    total_Rate = total_Rate + 1/2;
-                end
             end
-        end
+            end
     end
-       
     differenceR = sum(xor(Rerror,Rbin));
     differenceG = sum(xor(Gerror,Gbin));
     differenceB = sum(xor(Berror,Bbin));
@@ -84,7 +79,7 @@ for frame = 1:frames
     end
 end
 BER = difference/total_number_of_bits;
-total_Rate = total_Rate / total_number_of_packets;
+total_Rate =total_number_of_bits/total_number_of_transimitted_bits ;
 if (p==0.001)
 v = VideoWriter('upgrading_rate_channel_coding_with_error_probability_0.001.avi','Uncompressed AVI');
 open(v);
